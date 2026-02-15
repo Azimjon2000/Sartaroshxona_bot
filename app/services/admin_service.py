@@ -1,3 +1,4 @@
+from typing import List
 from app.db.base import fetch_one, fetch_all, execute_write
 
 
@@ -17,7 +18,7 @@ async def remove_admin(telegram_id: int):
     await execute_write("DELETE FROM admins WHERE telegram_id = ?", (telegram_id,))
 
 
-async def get_all_admin_ids() -> list[int]:
+async def get_all_admin_ids() -> List[int]:
     rows = await fetch_all("SELECT telegram_id FROM admins")
     return [r["telegram_id"] for r in rows]
 

@@ -1,7 +1,7 @@
 from app.db.base import fetch_one, fetch_all, execute_write
 
 
-from typing import Optional
+from typing import Optional, List
 
 
 async def create_client(telegram_id: int, name: str, phone: Optional[str] = None, lang: str = "uz"):
@@ -30,6 +30,6 @@ async def get_clients_count() -> int:
     return row["cnt"] if row else 0
 
 
-async def get_all_client_ids() -> list[int]:
+async def get_all_client_ids() -> List[int]:
     rows = await fetch_all("SELECT telegram_id FROM clients")
     return [r["telegram_id"] for r in rows]

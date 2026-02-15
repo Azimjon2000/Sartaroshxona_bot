@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 from app.db.base import fetch_one, fetch_all, execute_write, execute_write_returning
 
 
@@ -201,7 +201,7 @@ async def get_client_today_usage(client_id: int, today: str) -> Optional[dict]:
         (client_id, today)
     )
 
-async def get_confirmed_bookings_to_finish(date: str, current_hour: int) -> list[dict]:
+async def get_confirmed_bookings_to_finish(date: str, current_hour: int) -> List[Dict]:
     """
     Get all CONFIRMED bookings for a date that have finished.
     A booking for 09:00 (slot 1) is considered finished at 10:00.
