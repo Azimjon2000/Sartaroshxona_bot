@@ -1,4 +1,4 @@
-from typing import Any, Callable, Awaitable
+from typing import Any, Callable, Awaitable, Union, Dict
 
 from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
@@ -11,9 +11,9 @@ class AdminGuard(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
-        event: Message | CallbackQuery,
-        data: dict[str, Any],
+        handler: Callable[[Union[Message, CallbackQuery], dict[str, Any]], Awaitable[Any]],
+        event: Union[Message, CallbackQuery],
+        data: Dict[str, Any],
     ) -> Any:
         user_id = event.from_user.id
         row = await fetch_one(
@@ -35,9 +35,9 @@ class BarberGuard(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
-        event: Message | CallbackQuery,
-        data: dict[str, Any],
+        handler: Callable[[Union[Message, CallbackQuery], Dict[str, Any]], Awaitable[Any]],
+        event: Union[Message, CallbackQuery],
+        data: Dict[str, Any],
     ) -> Any:
         user_id = event.from_user.id
         row = await fetch_one(
@@ -59,9 +59,9 @@ class ClientGuard(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
-        event: Message | CallbackQuery,
-        data: dict[str, Any],
+        handler: Callable[[Union[Message, CallbackQuery], Dict[str, Any]], Awaitable[Any]],
+        event: Union[Message, CallbackQuery],
+        data: Dict[str, Any],
     ) -> Any:
         user_id = event.from_user.id
         row = await fetch_one(

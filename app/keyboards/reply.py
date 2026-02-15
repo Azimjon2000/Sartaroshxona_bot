@@ -1,7 +1,8 @@
+from typing import List, Dict
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 
-def main_menu_reply_keyboard(texts: dict) -> ReplyKeyboardMarkup:
+def main_menu_reply_keyboard(texts: Dict) -> ReplyKeyboardMarkup:
     """Reply keyboard with only 'Asosiy menyu' button."""
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text=texts["main_menu"])]],
@@ -10,7 +11,7 @@ def main_menu_reply_keyboard(texts: dict) -> ReplyKeyboardMarkup:
     )
 
 
-def phone_request_keyboard(texts: dict) -> ReplyKeyboardMarkup:
+def phone_request_keyboard(texts: Dict) -> ReplyKeyboardMarkup:
     """Reply keyboard with contact share button and Main Menu."""
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -22,7 +23,7 @@ def phone_request_keyboard(texts: dict) -> ReplyKeyboardMarkup:
     )
 
 
-def location_request_keyboard(texts: dict) -> ReplyKeyboardMarkup:
+def location_request_keyboard(texts: Dict) -> ReplyKeyboardMarkup:
     """Reply keyboard with location share button and Main Menu."""
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -34,7 +35,8 @@ def location_request_keyboard(texts: dict) -> ReplyKeyboardMarkup:
     )
 
 
-def region_reply_keyboard(names: list[str], texts: dict) -> ReplyKeyboardMarkup:
+
+def region_reply_keyboard(names: List[str], texts: Dict) -> ReplyKeyboardMarkup:
     """Dynamic 2-column keyboard for regions."""
     keyboard = []
     row = []
@@ -56,7 +58,7 @@ def region_reply_keyboard(names: list[str], texts: dict) -> ReplyKeyboardMarkup:
     )
 
 
-def district_reply_keyboard(names: list[str], texts: dict) -> ReplyKeyboardMarkup:
+def district_reply_keyboard(names: List[str], texts: Dict) -> ReplyKeyboardMarkup:
     """Dynamic 2-column keyboard for districts."""
     keyboard = []
     row = []
@@ -81,7 +83,7 @@ def district_reply_keyboard(names: list[str], texts: dict) -> ReplyKeyboardMarku
     )
 
 
-def confirm_reply_keyboard(texts: dict) -> ReplyKeyboardMarkup:
+def confirm_reply_keyboard(texts: Dict) -> ReplyKeyboardMarkup:
     """Confirm/Cancel reply keyboard."""
     return ReplyKeyboardMarkup(
         keyboard=[

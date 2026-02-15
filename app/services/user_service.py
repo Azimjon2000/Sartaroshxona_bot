@@ -1,7 +1,10 @@
 from app.db.base import fetch_one, fetch_all, execute_write
 
 
-async def get_user(telegram_id: int) -> dict | None:
+from typing import Optional
+
+
+async def get_user(telegram_id: int) -> Optional[dict]:
     return await fetch_one("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
 
 

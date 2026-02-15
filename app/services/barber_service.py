@@ -1,11 +1,12 @@
+from typing import List, Optional, Tuple
 from app.db.base import fetch_one, fetch_all, execute_write
 
 
 async def create_barber(
     telegram_id: int, name: str, phone: str,
     region_id: int, district_id: int,
-    salon_name: str, photo_file_id: str | None,
-    lat: float | None, lon: float | None,
+    salon_name: str, photo_file_id: Optional[str],
+    lat: Optional[float], lon: Optional[float],
     lang: str = "uz",
 ):
     await execute_write(
@@ -29,7 +30,7 @@ async def create_barber(
     )
 
 
-async def get_barber(telegram_id: int) -> dict | None:
+async def get_barber(telegram_id: int) -> Optional[dict]:
     return await fetch_one("SELECT * FROM barbers WHERE telegram_id = ?", (telegram_id,))
 
 
@@ -50,26 +51,26 @@ async def update_barber_field(telegram_id: int, field: str, value):
     )
 
 
-async def get_all_barbers(status: str | None = None) -> list[dict]:
+async def get_all_barbers(status: Optional[str] = None) -> List[dict]:
     if status:
         return await fetch_all("SELECT * FROM barbers WHERE status = ?", (status,))
     return await fetch_all("SELECT * FROM barbers")
 
 
-async def get_barbers_by_district(district_id: int) -> list[dict]:
+async def get_barbers_by_district(district_id: int) -> List[dict]:
     return await fetch_all(
         "SELECT * FROM barbers WHERE district_id = ? AND status = 'APPROVED'",
         (district_id,),
     )
 
 
-async def get_approved_barbers_with_location() -> list[dict]:
+async def get_approved_barbers_with_location() -> List[dict]:
     return await fetch_all(
         "SELECT * FROM barbers WHERE status = 'APPROVED' AND lat IS NOT NULL AND lon IS NOT NULL"
     )
 
 
-async def get_barbers_nearby(lat: float, lon: float, radius_km: float) -> list[dict]:
+async def get_barbers_nearby(lat: float, lon: float, radius_km: float) -> List[dict]:
     """Retrieve barbers within a bounding box using SQL, for further haversine filtering."""
     import math
     # 1 degree lat approx 111km
@@ -86,7 +87,7 @@ async def get_barbers_nearby(lat: float, lon: float, radius_km: float) -> list[d
     return await fetch_all(query, (lat - dlat, lat + dlat, lon - dlon, lon + dlon))
 
 
-async def get_work_hours(barber_id: int) -> list[dict]:
+async def get_work_hours(barber_id: int) -> List[dict]:
     return await fetch_all(
         "SELECT * FROM work_hours WHERE barber_id = ? ORDER BY hour_slot",
         (barber_id,),
@@ -101,7 +102,7 @@ async def toggle_work_hour(barber_id: int, hour_slot: int):
     )
 
 
-async def get_prices(barber_id: int) -> dict | None:
+async def get_prices(barber_id: int) -> Optional[dict]:
     return await fetch_one("SELECT * FROM services_prices WHERE barber_id = ?", (barber_id,))
 
 
@@ -115,7 +116,7 @@ async def update_price(barber_id: int, field: str, value):
     )
 
 
-async def get_barber_photos(barber_id: int) -> list[dict]:
+async def get_barber_photos(barber_id: int) -> List[dict]:
     return await fetch_all(
         "SELECT * FROM media_photos WHERE barber_id = ? ORDER BY id",
         (barber_id,),
@@ -139,7 +140,7 @@ async def delete_barber_photo(photo_id: int):
     await execute_write("DELETE FROM media_photos WHERE id = ?", (photo_id,))
 
 
-async def get_barber_videos(barber_id: int) -> list[dict]:
+async def get_barber_videos(barber_id: int) -> List[dict]:
     return await fetch_all(
         "SELECT * FROM media_videos WHERE barber_id = ? ORDER BY id",
         (barber_id,),
@@ -163,7 +164,7 @@ async def delete_barber_video(video_id: int):
     await execute_write("DELETE FROM media_videos WHERE id = ?", (video_id,))
 
 
-async def get_barber_avg_rating(barber_id: int) -> tuple[float, int]:
+async def get_barber_avg_rating(barber_id: int) -> Tuple[float, int]:
     """Returns (average_stars, count)."""
     row = await fetch_one(
         "SELECT AVG(stars) as avg_stars, COUNT(*) as cnt FROM ratings WHERE barber_id = ?",
@@ -182,7 +183,7 @@ async def get_barber_served_count(barber_id: int) -> int:
     return row["cnt"] if row else 0
 
 
-async def get_barber_comments(barber_id: int) -> list[dict]:
+async def get_barber_comments(barber_id: int) -> List[dict]:
     return await fetch_all(
         """SELECT r.comment, c.name as client_name
            FROM ratings r

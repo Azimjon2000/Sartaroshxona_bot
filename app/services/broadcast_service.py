@@ -9,12 +9,14 @@ from app.config import BROADCAST_BATCH_SIZE, BROADCAST_PAUSE_SECONDS
 logger = logging.getLogger("barbershop")
 
 
+from typing import List, Optional, Tuple
+
 async def broadcast_message(
     bot: Bot,
-    user_ids: list[int],
+    user_ids: List[int],
     text: str,
-    photo_file_id: str | None = None,
-) -> tuple[int, int]:
+    photo_file_id: Optional[str] = None,
+) -> Tuple[int, int]:
     """
     Send broadcast to list of user IDs.
     Throttle: BROADCAST_BATCH_SIZE per second, then pause.

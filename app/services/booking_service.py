@@ -1,3 +1,4 @@
+from typing import List, Optional, Union
 from app.db.base import fetch_one, fetch_all, execute_write, execute_write_returning
 
 
@@ -61,11 +62,11 @@ async def expire_booking(booking_id: int):
     )
 
 
-async def get_booking(booking_id: int) -> dict | None:
+async def get_booking(booking_id: int) -> Optional[dict]:
     return await fetch_one("SELECT * FROM bookings WHERE id = ?", (booking_id,))
 
 
-async def get_confirmed_slots(barber_id: int, date: str) -> list[int]:
+async def get_confirmed_slots(barber_id: int, date: str) -> List[int]:
     """Get list of hour_slots that are CONFIRMED for a barber on a date."""
     rows = await fetch_all(
         "SELECT hour_slot FROM bookings WHERE barber_id = ? AND date = ? AND status = 'CONFIRMED'",
@@ -74,7 +75,7 @@ async def get_confirmed_slots(barber_id: int, date: str) -> list[int]:
     return [r["hour_slot"] for r in rows]
 
 
-async def get_client_active_draft(client_id: int) -> dict | None:
+async def get_client_active_draft(client_id: int) -> Optional[dict]:
     """Get active DRAFT booking for a client."""
     return await fetch_one(
         "SELECT * FROM bookings WHERE client_id = ? AND status = 'DRAFT' ORDER BY created_at DESC LIMIT 1",
@@ -82,7 +83,7 @@ async def get_client_active_draft(client_id: int) -> dict | None:
     )
 
 
-async def get_client_unrated_done(client_id: int) -> dict | None:
+async def get_client_unrated_done(client_id: int) -> Optional[dict]:
     """Check if client has a DONE booking without rating."""
     return await fetch_one(
         """SELECT b.* FROM bookings b
@@ -93,7 +94,7 @@ async def get_client_unrated_done(client_id: int) -> dict | None:
     )
 
 
-async def get_client_cancelled_today(client_id: int, today: str) -> dict | None:
+async def get_client_cancelled_today(client_id: int, today: str) -> Optional[dict]:
     """Check if client has a penalty (cancelled with <1hr remaining today)."""
     # Check both cancelled bookings (historical logic) and new penalties table
     penalty = await fetch_one(
@@ -120,7 +121,7 @@ async def add_penalty(client_id: int, date: str, reason: str):
     )
 
 
-async def get_barber_bookings_for_date(barber_id: int, date: str) -> list[dict]:
+async def get_barber_bookings_for_date(barber_id: int, date: str) -> List[dict]:
     """Get all CONFIRMED bookings for a barber on a date."""
     return await fetch_all(
         """SELECT b.*, c.name as client_name, c.phone as client_phone
@@ -147,7 +148,7 @@ async def expire_old_drafts():
         "AND created_at < datetime('now', '-4 minutes')"
     )
 
-async def get_client_future_confirmed_bookings(client_id: int) -> list[dict]:
+async def get_client_future_confirmed_bookings(client_id: int) -> List[dict]:
     """Get all future CONFIRMED bookings for a client."""
     from app.utils.time_utils import today_tashkent
     today = today_tashkent()
@@ -163,7 +164,7 @@ async def get_client_future_confirmed_bookings(client_id: int) -> list[dict]:
            ORDER BY b.date, b.hour_slot""",
         (client_id, today),
     )
-async def get_client_active_booking(client_id: int) -> dict | None:
+async def get_client_active_booking(client_id: int) -> Optional[dict]:
     """
     Get a single CONFIRMED booking for client that is in the future or current hour.
     Includes barber details.
@@ -187,7 +188,7 @@ async def get_client_active_booking(client_id: int) -> dict | None:
     return None
 
 
-async def get_client_today_usage(client_id: int, today: str) -> dict | None:
+async def get_client_today_usage(client_id: int, today: str) -> Optional[dict]:
     """
     Check if client has ANY booking today that effectively uses their daily slot.
     This includes:

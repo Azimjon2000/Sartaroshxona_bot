@@ -1,3 +1,4 @@
+from typing import Union, Optional
 import logging
 from aiogram import Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
@@ -8,12 +9,12 @@ logger = logging.getLogger("barbershop")
 
 
 async def ensure_flow_message(
-    event: Message | CallbackQuery,
+    event: Union[Message, CallbackQuery],
     text: str,
     state: FSMContext,
-    keyboard: InlineKeyboardMarkup | None = None,
-    photo: str | None = None,
-    bot: Bot | None = None,
+    keyboard: Optional[InlineKeyboardMarkup] = None,
+    photo: Optional[str] = None,
+    bot: Optional[Bot] = None,
 ):
     """
     Edit existing flow message or send a new one.
@@ -86,9 +87,9 @@ async def ensure_flow_message(
 
 
 async def send_ok_popup(
-    event: Message | CallbackQuery,
+    event: Union[Message, CallbackQuery],
     text: str,
-    bot: Bot | None = None,
+    bot: Optional[Bot] = None,
 ):
     """
     Send a separate 'OK' message that deletes itself when OK is pressed.

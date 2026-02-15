@@ -1,9 +1,9 @@
-from typing import Any
+from typing import Any, List, Tuple
 
 from app.config import PAGE_SIZE
 
 
-def paginate(items: list[Any], page: int, page_size: int = PAGE_SIZE) -> tuple[list[Any], int, bool, bool]:
+def paginate(items: List[Any], page: int, page_size: int = PAGE_SIZE) -> Tuple[List[Any], int, bool, bool]:
     """
     Paginate a list of items.
 

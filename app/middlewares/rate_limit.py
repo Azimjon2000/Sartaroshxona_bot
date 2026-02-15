@@ -1,6 +1,6 @@
 import time
 from collections import defaultdict
-from typing import Any, Callable, Awaitable
+from typing import Any, Callable, Awaitable, Dict, List
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery
@@ -21,13 +21,13 @@ class RateLimitMiddleware(BaseMiddleware):
 
     def __init__(self):
         super().__init__()
-        self.hits: dict[int, list[float]] = defaultdict(list)
+        self.hits: Dict[int, List[float]] = defaultdict(list)
 
     async def __call__(
         self,
-        handler: Callable[[CallbackQuery, dict[str, Any]], Awaitable[Any]],
+        handler: Callable[[CallbackQuery, Dict[str, Any]], Awaitable[Any]],
         event: CallbackQuery,
-        data: dict[str, Any],
+        data: Dict[str, Any],
     ) -> Any:
         if not isinstance(event, CallbackQuery) or not event.data:
             return await handler(event, data)

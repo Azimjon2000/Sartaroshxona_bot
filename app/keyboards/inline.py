@@ -1,3 +1,4 @@
+from typing import List, Dict, Optional, Union
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
@@ -33,7 +34,7 @@ def lang_keyboard() -> InlineKeyboardMarkup:
 
 # ── Barber Registration ──
 
-def barber_reg_regions_keyboard(regions: list[dict], page: int, texts: dict, back_callback: str = None) -> InlineKeyboardMarkup:
+def barber_reg_regions_keyboard(regions: List[Dict], page: int, texts: Dict, back_callback: Optional[str] = None) -> InlineKeyboardMarkup:
     from app.utils.pagination import paginate
     page_items, total_pages, has_prev, has_next = paginate(regions, page, page_size=20)
 
@@ -63,7 +64,7 @@ def barber_reg_regions_keyboard(regions: list[dict], page: int, texts: dict, bac
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def barber_reg_districts_keyboard(districts: list[dict], page: int, texts: dict, back_callback: str = None) -> InlineKeyboardMarkup:
+def barber_reg_districts_keyboard(districts: List[Dict], page: int, texts: Dict, back_callback: Optional[str] = None) -> InlineKeyboardMarkup:
     from app.utils.pagination import paginate
     page_items, total_pages, has_prev, has_next = paginate(districts, page, page_size=20)
 
@@ -196,7 +197,7 @@ def barber_settings_keyboard(texts: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def schedule_keyboard(slots: list[dict], texts: dict) -> InlineKeyboardMarkup:
+def schedule_keyboard(slots: List[Dict], texts: Dict) -> InlineKeyboardMarkup:
     """4x4 grid of hour toggles."""
     from app.utils.time_utils import slot_to_hour
     rows = []
@@ -295,7 +296,7 @@ def barber_card_keyboard(barber_id: int, texts: dict) -> InlineKeyboardMarkup:
 
 
 def booking_slots_keyboard(
-    slots: list[dict], barber_id: int, texts: dict
+    slots: List[Dict], barber_id: int, texts: Dict
 ) -> InlineKeyboardMarkup:
     """Grid of available hour slots for booking."""
     from app.utils.time_utils import slot_to_hour

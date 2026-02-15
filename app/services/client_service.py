@@ -1,14 +1,17 @@
 from app.db.base import fetch_one, fetch_all, execute_write
 
 
-async def create_client(telegram_id: int, name: str, phone: str | None = None, lang: str = "uz"):
+from typing import Optional
+
+
+async def create_client(telegram_id: int, name: str, phone: Optional[str] = None, lang: str = "uz"):
     await execute_write(
         "INSERT INTO clients (telegram_id, name, phone, lang) VALUES (?, ?, ?, ?)",
         (telegram_id, name, phone, lang),
     )
 
 
-async def get_client(telegram_id: int) -> dict | None:
+async def get_client(telegram_id: int) -> Optional[dict]:
     return await fetch_one("SELECT * FROM clients WHERE telegram_id = ?", (telegram_id,))
 
 
