@@ -148,13 +148,56 @@ async def expire_old_drafts():
         "AND created_at < datetime('now', '-4 minutes')"
     )
 
+
+async def send_premium_reminders(today: str, now, bot):
+    """P4: Send 2-hour reminders for bookings of ACTIVE premium barbers only."""
+    import logging
+    from app.utils.time_utils import slot_to_hour
+    logger = logging.getLogger("barbershop")
+    
+    target_slot = now.hour + 2 - 8  # convert hour to slot index (WORK_HOUR_START=8)
+    if target_slot < 0 or target_slot > 15:
+        return
+    
+    query = """
+        SELECT b.*, c.lang, c.name as client_name,
+               br.name as barber_name, br.phone as barber_phone,
+               br.lat as barber_lat, br.lon as barber_lon,
+               br.salon_name
+        FROM bookings b
+        JOIN barbers br ON b.barber_id = br.telegram_id
+        JOIN clients c ON b.client_id = c.telegram_id
+        WHERE b.date = ? 
+          AND b.status = 'CONFIRMED'
+          AND b.hour_slot = ?
+          AND b.reminded = 0
+          AND br.premium_status = 'ACTIVE'
+    """
+    to_remind = await fetch_all(query, (today, target_slot))
+    
+    for b in to_remind:
+        try:
+            target_hour = slot_to_hour(b["hour_slot"])
+            loc_link = ""
+            if b.get("barber_lat") and b.get("barber_lon"):
+                loc_link = f"\n📍 https://www.google.com/maps/search/?api=1&query={b['barber_lat']},{b['barber_lon']}"
+            
+            text = (
+                f"⏰ {b['barber_name']}ga soat {target_hour:02d}:00 ga yozilgansiz.\n"
+                f"💈 {b.get('salon_name', '')}"
+                f"{loc_link}\n"
+                f"📞 {b.get('barber_phone', '')}"
+            )
+            await bot.send_message(chat_id=b["client_id"], text=text)
+            await execute_write("UPDATE bookings SET reminded = 1 WHERE id = ?", (b["id"],))
+        except Exception as e:
+            logger.error(f"Failed to remind booking {b['id']}: {e}")
+
+
 async def get_client_future_confirmed_bookings(client_id: int) -> List[dict]:
     """Get all future CONFIRMED bookings for a client."""
     from app.utils.time_utils import today_tashkent
     today = today_tashkent()
-    # Simple check: date >= today. stricter check requires time logic.
-    # For now, let's fetch >= today and filter in python or SQL if needed.
-    # We want to show details including barber info.
     return await fetch_all(
         """SELECT b.*, bar.name as barber_name, bar.phone as barber_phone, 
                   bar.salon_name, bar.lat, bar.lon, bar.photo_file_id
@@ -164,53 +207,103 @@ async def get_client_future_confirmed_bookings(client_id: int) -> List[dict]:
            ORDER BY b.date, b.hour_slot""",
         (client_id, today),
     )
+
+
 async def get_client_active_booking(client_id: int) -> Optional[dict]:
-    """
-    Get a single CONFIRMED booking for client that is in the future or current hour.
-    Includes barber details.
-    """
+    """Get a single CONFIRMED booking for client that is in the future or current hour."""
     from app.utils.time_utils import today_tashkent, now_tashkent, slot_to_hour
     today = today_tashkent()
     now = now_tashkent()
     
-    # We fetch all (there should be max 1-2 if logic was loose) and filter strictly in python
     bookings = await get_client_future_confirmed_bookings(client_id)
     
     for b in bookings:
         if b["date"] > today:
             return b
         elif b["date"] == today:
-            # If start_hour=14, it is active until 15:00.
-            # slot_to_hour(14) -> 14.
-            # 14 + 1 = 15. If now.hour < 15, it's active.
             if slot_to_hour(b["hour_slot"]) + 1 > now.hour:
                 return b
     return None
 
 
 async def get_client_today_usage(client_id: int, today: str) -> Optional[dict]:
-    """
-    Check if client has ANY booking today that effectively uses their daily slot.
-    This includes:
-    - DONE bookings.
-    - CONFIRMED bookings for today (even if past hour, if not cancelled).
-    Purpose: strict 1-booking-per-day limit.
-    """
+    """Check if client has ANY booking today that uses their daily slot."""
     return await fetch_one(
         "SELECT * FROM bookings WHERE client_id = ? AND date = ? AND status IN ('DONE', 'CONFIRMED') LIMIT 1",
         (client_id, today)
     )
 
+
+async def get_client_booking_for_date(client_id: int, date: str) -> Optional[dict]:
+    """Check if client already has an active booking for a specific date."""
+    return await fetch_one(
+        "SELECT * FROM bookings WHERE client_id = ? AND date = ? AND status IN ('DRAFT', 'CONFIRMED') LIMIT 1",
+        (client_id, date)
+    )
+
+
 async def get_confirmed_bookings_to_finish(date: str, current_hour: int) -> List[Dict]:
-    """
-    Get all CONFIRMED bookings for a date that have finished.
-    A booking for 09:00 (slot 1) is considered finished at 10:00.
-    """
+    """Get all CONFIRMED bookings for a date that have finished."""
     from app.config import WORK_HOUR_START
-    # Example: if current_hour is 10, limit_slot is 10 - 8 - 1 = 1.
-    # Slots <= 1 (08:00, 09:00) are marked DONE.
     limit_slot = current_hour - WORK_HOUR_START - 1
     return await fetch_all(
         "SELECT * FROM bookings WHERE date = ? AND status = 'CONFIRMED' AND hour_slot <= ?",
         (date, limit_slot)
     )
+
+
+# ═══════════════════════════════════════════
+# P3 — Client Analytics
+# ═══════════════════════════════════════════
+
+async def get_analytics_clients(barber_id: int, category: str) -> List[dict]:
+    """Get client analytics for a barber.
+    category: 'kamnamo' (90 days no visit), 'doimiy' (2+ in 90d), 'yoqotilgan' (180d no visit)
+    """
+    from app.utils.time_utils import tashkent_now
+    from datetime import timedelta
+    now = tashkent_now()
+
+    if category == "kamnamo":
+        cutoff = (now - timedelta(days=90)).strftime('%Y-%m-%d')
+        return await fetch_all(
+            """SELECT c.telegram_id, c.name, c.phone, MAX(b.date) as last_visit, COUNT(b.id) as total
+               FROM bookings b JOIN clients c ON b.client_id = c.telegram_id
+               WHERE b.barber_id = ? AND b.status = 'DONE'
+               GROUP BY c.telegram_id
+               HAVING MAX(b.date) < ?
+               ORDER BY MAX(b.date) ASC""",
+            (barber_id, cutoff),
+        )
+    elif category == "doimiy":
+        cutoff = (now - timedelta(days=90)).strftime('%Y-%m-%d')
+        return await fetch_all(
+            """SELECT c.telegram_id, c.name, c.phone, MAX(b.date) as last_visit, COUNT(b.id) as total
+               FROM bookings b JOIN clients c ON b.client_id = c.telegram_id
+               WHERE b.barber_id = ? AND b.status = 'DONE' AND b.date >= ?
+               GROUP BY c.telegram_id
+               HAVING COUNT(b.id) >= 2
+               ORDER BY COUNT(b.id) DESC""",
+            (barber_id, cutoff),
+        )
+    elif category == "yoqotilgan":
+        cutoff = (now - timedelta(days=180)).strftime('%Y-%m-%d')
+        return await fetch_all(
+            """SELECT c.telegram_id, c.name, c.phone, MAX(b.date) as last_visit, COUNT(b.id) as total
+               FROM bookings b JOIN clients c ON b.client_id = c.telegram_id
+               WHERE b.barber_id = ? AND b.status = 'DONE'
+               GROUP BY c.telegram_id
+               HAVING MAX(b.date) < ?
+               ORDER BY MAX(b.date) ASC""",
+            (barber_id, cutoff),
+        )
+    return []
+
+
+async def get_client_visit_dates(barber_id: int, client_id: int) -> List[dict]:
+    """Get all visit dates for a specific client at a specific barber."""
+    return await fetch_all(
+        "SELECT date, hour_slot FROM bookings WHERE barber_id = ? AND client_id = ? AND status = 'DONE' ORDER BY date DESC",
+        (barber_id, client_id),
+    )
+

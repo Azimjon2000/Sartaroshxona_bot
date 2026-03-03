@@ -95,6 +95,9 @@ TEXTS_UZ = {
     "enter_extra_note": "📝 Qo'shimcha xizmat izohi (max 300 belgi):",
     "prices_saved": "✅ Narxlar saqlandi!",
     "price_invalid": "❌ Faqat raqam kiriting.",
+    "hair_price_set": "💇 Soch narxi belgilandi.",
+    "beard_price_set": "🧔 Soqol narxi belgilandi.",
+    "groom_price_set": "🤵 Kuyov narxi belgilandi.",
     "settings_saved": "✅ Sozlamalar saqlandi!",
     "barber_settings_title": "⚙️ <b>Sozlamalar</b>",
     "enter_new_name": "✍️ Yangi ismni kiriting:",
@@ -127,6 +130,107 @@ TEXTS_UZ = {
         "ℹ️ <b>Bot haqida</b>\n\n"
         "Bu bot sartaroshlar va klientlarni bog'laydi.\n"
         "Ish jadvalingizni sozlang, narxlarni kiriting va mijozlarni qabul qiling!"
+    ),
+    "referral_link_msg": (
+        "📇 <b>Shaxsiy vizitkangiz</b>\n\n"
+        "Mijozlar ushbu havola orqali kirsalar, bugun uchun to'g'ridan-to'g'ri faqat sizga yoziladilar:\n\n"
+        "<code>{link}</code>"
+    ),
+    "premium_status_msg": (
+        "👑 <b>Premium obuna</b>\n\n"
+        "Holati: <b>{status}</b>\n"
+        "{until_text}"
+    ),
+    "premium_status_active": "Faol",
+    "premium_status_inactive": "Faol emas",
+    "premium_status_pending": "Admindan tasdiq kutilmoqda",
+    "premium_buy_msg": (
+        "💳 <b>Premium sotib olish</b>\n\n"
+        "👑 Premium bilan ko‘proq mijoz oling va daromadingizni oshiring!:\n"        
+        "✨ Sizga ochiladi:\n"
+        "• 👑 Qidiruvda ajralib turish (premium belgisi bilan 👑 klentlarga ko'rinadi):\n"
+        "• 📅 6 oygacha oldindan bron qabul qilish ( bepul standart tarifida faqat 1 kun)\n"
+        "• 🔔 Avval kelgan mijozlarga ma'lum muddatda xizmatdan yana foydalanish uchun avtomatik eslatma yuborish\n"
+        "• 📊 Mijozlar analitikasi (doimiy, yo‘qotilgan, kamnamo)\n"
+        "•⏰ Bron vaqtidan 2 soat avval mijozga yuboriluvchi avtomatik eslatma\n\n"
+        "Narxi: <b>{price}</b> so'm\n"
+        "Karta raqami: <code>{card}</code>\n\n"
+        "✅ To'lov qilgach, chekni quyidagi profilga yuboring:\n"
+        "👤 {support_profile}\n\n"
+        "Keyin quyidagi tugmani bosing."
+    ),
+    "premium_pending": "✅ So'rovingiz adminga yuborildi. Kuting.",
+    "premium_expired": "Sizning premium obunangiz muddati tugadi. Bepul rejimga qaytdingiz.",
+    "premium_menu_title": "👑 <b>Premium menyu</b>",
+    "btn_premium_reminder": "🔔 Mijozlarga eslatma",
+    "btn_premium_analytics": "📊 Mijozlar analitikasi",
+    "referral_locked_search_msg": "Siz bugun faqat vizitka orqali yozila olasiz!",
+
+    # --- P1: Client reminders ---
+    "reminder_days_title": "🔔 Necha kundan beri kelmagan mijozlarga eslatma yuborasiz?",
+    "reminder_custom_prompt": "📝 Kunlar sonini kiriting (masalan: 30):",
+    "reminder_sending": "⏳ Eslatmalar yuborilmoqda... ({sent}/{total})",
+    "reminder_done": "✅ {sent} ta mijozga eslatma yuborildi!",
+    "reminder_no_clients": "😕 Ushbu vaqt oralig'ida eslatma yuboriladigan mijoz topilmadi.",
+    "reminder_text": (
+        "{name}, oxirgi kelganingizga {days} kun bo'libdi.\n"
+        "Yaxshi ko'rinish — yaxshi kayfiyat kaliti!\n\n"
+        "{link}"
+    ),
+    "reminder_confirm": "⚠️ {count} ta mijozga eslatma yuboriladi. Tasdiqlaysizmi?",
+    "auto_reminder_set": "✅ Avtomatik eslatma saqlandi. Bot har kuni ushbu muddatdan beri kelmagan mijozlarga avtomatik xabar yuboradi.",
+    "auto_reminder_info": "\n\n🔔 Hozirgi davriylik: <b>{days} kun</b>",
+
+    # --- P2: Future booking ---
+    "btn_book_today": "📅 Bugun",
+    "btn_book_tomorrow": "📅 Ertaga",
+    "btn_book_calendar": "📅 Sana tanlash",
+    "choose_booking_date": "📅 Bron qilish sanasini tanlang:",
+    "calendar_title": "📅 <b>{month_name} {year}</b>",
+    "booking_date_blocked": "🚫 Ushbu sana uchun allaqachon broningiz bor.",
+    "premium_barber_blocked_msg": "🚫 Bu sartaroshning premium obunasi tugagan. Hozirda bron qilib bo'lmaydi.",
+
+    # --- P3: Analytics ---
+    "analytics_title": "📊 <b>Mijozlar analitikasi</b>\n\nKategoriyani tanlang:",
+    "btn_analytics_kamnamo": "🐢 Kamnamo (3 oy)",
+    "btn_analytics_doimiy": "🔄 Doimiy (3 oyda 2+)",
+    "btn_analytics_yoqotilgan": "⚠️ Yo'qotilgan (6 oy)",
+    "analytics_empty": "Bu kategoriyada mijozlar topilmadi.",
+    "analytics_list_title": "📊 <b>{category}</b> ({count} ta):",
+    "client_detail_card": (
+        "👤 <b>{name}</b>\n"
+        "📞 {phone}\n"
+        "📅 Jami tashriflar: {total}\n"
+        "🕐 Oxirgi tashrif: {last_visit}"
+    ),
+    "btn_send_reminder_single": "🔔 Eslatma yuborish",
+    "single_reminder_confirm": "🔔 {name}ga eslatma yuborasizmi?",
+    "single_reminder_sent": "✅ Eslatma yuborildi!",
+
+    # --- Admin Premium Config ---
+    "btn_admin_premium_settings": "💰 Premium sozlamalari",
+    "btn_admin_premium_requests": "📋 Premium so'rovlar",
+    "admin_premium_settings_title": (
+        "⚙️ <b>Premium sozlamalari</b>\n\n"
+        "Narx: <b>{price}</b> so'm\n"
+        "Karta: <code>{card}</code>\n"
+        "Profil: {profile}"
+    ),
+    "btn_edit_premium_price": "💰 Narxni o'zgartirish",
+    "btn_edit_payment_card": "💳 Kartani o'zgartirish",
+    "btn_edit_support_profile": "👤 Profilni o'zgartirish",
+    "admin_enter_price": "💰 Yangi premium narxini kiriting (so'm):",
+    "admin_enter_card": "💳 Yangi karta raqamini kiriting:",
+    "admin_enter_profile": "👤 Yangi qo'llab-quvvatlash profili (@username):",
+    "admin_price_updated": "✅ Premium narxi yangilandi: {price} so'm",
+    "admin_card_updated": "✅ Karta raqami yangilandi!",
+    "admin_profile_updated": "✅ Qo'llab-quvvatlash profili yangilandi!",
+    "admin_no_premium_requests": "📋 Hozircha premium so'rovlar yo'q.",
+    "admin_premium_request_card": (
+        "👑 <b>Premium so'rov</b>\n\n"
+        "👤 {name}\n"
+        "📞 {phone}\n"
+        "💈 {salon}"
     ),
 
     # --- Client ---

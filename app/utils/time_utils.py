@@ -44,3 +44,8 @@ def seconds_until_slot(date_str: str, slot: int) -> float:
     slot_dt = slot_datetime(date_str, slot)
     delta = slot_dt - now_tashkent()
     return delta.total_seconds()
+
+
+# Aliases for newer code (Phase 10)
+tashkent_now = now_tashkent
+today_uz_str = today_tashkent

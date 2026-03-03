@@ -4,11 +4,13 @@ import logging
 from app.loader import bot, dp
 from app.db.base import init_db
 from app.db.seed import seed_regions
+from app.utils.db_migrations import run_migrations
 from app.middlewares.rate_limit import RateLimitMiddleware
 from app.middlewares.i18n import I18nMiddleware
 
 # Import routers
 from app.handlers import common, barber_reg, barber_menu, client_reg, client_menu, client_search, rating, admin
+from app.handlers import barber_premium_features
 
 
 from logging.handlers import RotatingFileHandler
@@ -60,6 +62,10 @@ async def seed_admins():
 async def on_startup():
     logger.info("Initializing database...")
     await init_db()
+    
+    logger.info("Running safe database migrations...")
+    await run_migrations()
+    
     await seed_regions()
     await seed_admins()
 
@@ -78,6 +84,7 @@ def register_routers():
     dp.include_router(client_menu.router)
     dp.include_router(client_search.router)
     dp.include_router(rating.router)
+    dp.include_router(barber_premium_features.router)
 
 
 def register_middlewares():

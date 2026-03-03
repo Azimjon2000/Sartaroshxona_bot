@@ -125,6 +125,9 @@ def barber_reg_edit_keyboard(texts: dict) -> InlineKeyboardMarkup:
 def admin_menu_keyboard(texts: dict) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=texts["btn_admin_barbers"], callback_data="adm:barbers")],
+        [InlineKeyboardButton(text="👑 Premium sartaroshlar", callback_data="adm:premiums")],
+        [InlineKeyboardButton(text=texts.get("btn_admin_premium_settings", "💰 Premium sozlamalari"), callback_data="adm:prem_settings")],
+        [InlineKeyboardButton(text=texts.get("btn_admin_premium_requests", "📋 Premium so'rovlar"), callback_data="adm:prem_requests")],
         [InlineKeyboardButton(text=texts["btn_admin_stats"], callback_data="adm:stats")],
         [InlineKeyboardButton(text=texts["btn_admin_add"], callback_data="adm:add_admin")],
         [InlineKeyboardButton(text=texts["btn_admin_broadcast"], callback_data="adm:broadcast")],
@@ -133,7 +136,11 @@ def admin_menu_keyboard(texts: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def admin_barber_actions_keyboard(barber_id: int, status: str, texts: dict) -> InlineKeyboardMarkup:
+def admin_barber_actions_keyboard(barber: dict, texts: dict) -> InlineKeyboardMarkup:
+    barber_id = barber["telegram_id"]
+    status = barber["status"]
+    prem_status = barber.get("premium_status")
+    
     rows = []
     if status == "PENDING":
         rows.append([InlineKeyboardButton(text=texts["btn_approve"], callback_data=f"admb:approve:{barber_id}")])
@@ -141,6 +148,12 @@ def admin_barber_actions_keyboard(barber_id: int, status: str, texts: dict) -> I
         rows.append([InlineKeyboardButton(text=texts["btn_block"], callback_data=f"admb:block:{barber_id}")])
     else:
         rows.append([InlineKeyboardButton(text=texts["btn_unblock"], callback_data=f"admb:unblock:{barber_id}")])
+
+    if prem_status == "ACTIVE":
+        rows.append([InlineKeyboardButton(text="❌ Premium bekor qilish", callback_data=f"adm_prem:reject:{barber_id}")])
+    elif prem_status == "INACTIVE" or not prem_status:
+        rows.append([InlineKeyboardButton(text="✅ Premium berish (30 kun)", callback_data=f"adm_prem:approve:{barber_id}")])
+
     rows.append([InlineKeyboardButton(text=texts["btn_hard_delete"], callback_data=f"admb:delete:{barber_id}")])
     rows.append([InlineKeyboardButton(text=texts["btn_send_message"], callback_data=f"admb:msg:{barber_id}")])
     rows.append([back_button("adm_barbers", texts)])
@@ -153,6 +166,15 @@ def admin_barber_approve_keyboard(barber_id: int, texts: dict) -> InlineKeyboard
         [
             InlineKeyboardButton(text=texts["btn_approve"], callback_data=f"admb:approve:{barber_id}"),
             InlineKeyboardButton(text=texts["btn_block"], callback_data=f"admb:block:{barber_id}"),
+        ]
+    ])
+
+
+def admin_premium_approve_keyboard(barber_id: int, texts: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"adm_prem:approve:{barber_id}"),
+            InlineKeyboardButton(text="❌ Rad etish", callback_data=f"adm_prem:reject:{barber_id}"),
         ]
     ])
 
@@ -176,6 +198,7 @@ def barber_menu_keyboard(texts: dict) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=texts["btn_settings"], callback_data="bmenu:settings")],
         [InlineKeyboardButton(text=texts["btn_work_photos"], callback_data="bmenu:photos")],
         [InlineKeyboardButton(text=texts["btn_work_videos"], callback_data="bmenu:videos")],
+        [InlineKeyboardButton(text="👑 Premium obuna", callback_data="bmenu:premium")],
         [InlineKeyboardButton(text=texts["btn_my_rating"], callback_data="bmenu:rating")],
         [
             InlineKeyboardButton(text=texts["btn_users_count"], callback_data="bmenu:users_count"),
@@ -193,7 +216,144 @@ def barber_settings_keyboard(texts: dict) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📍 Lokatsiya", callback_data="bset:location")],
         [InlineKeyboardButton(text="📸 Rasm", callback_data="bset:photo")],
         [InlineKeyboardButton(text=texts["btn_lang"], callback_data="bset:lang")],
+        [InlineKeyboardButton(text="📇 Shaxsiy vizitka", callback_data="bset:referral")],
         [back_button("bmenu", texts)],
+    ])
+
+
+def premium_menu_keyboard(texts: dict) -> InlineKeyboardMarkup:
+    """Premium barber's extra features menu."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=texts["btn_premium_reminder"], callback_data="bprem:reminder")],
+        [InlineKeyboardButton(text=texts["btn_premium_analytics"], callback_data="bprem:analytics")],
+        [back_button("bmenu_premium", texts)],
+    ])
+
+
+def reminder_days_keyboard(texts: dict) -> InlineKeyboardMarkup:
+    """P1: Choose how many days for client reminder."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="15 kun", callback_data="bprem:remind_days:15")],
+        [InlineKeyboardButton(text="20 kun", callback_data="bprem:remind_days:20")],
+        [InlineKeyboardButton(text="25 kun", callback_data="bprem:remind_days:25")],
+        [InlineKeyboardButton(text="✏️ Qo'lda kiritish", callback_data="bprem:remind_custom")],
+        [back_button("bprem_menu", texts)],
+    ])
+
+
+def future_booking_date_keyboard(barber_id: int, texts: dict) -> InlineKeyboardMarkup:
+    """P2: Choose booking date — today, tomorrow, or calendar."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=texts["btn_book_today"], callback_data=f"cbook:date:{barber_id}:today")],
+        [InlineKeyboardButton(text=texts["btn_book_tomorrow"], callback_data=f"cbook:date:{barber_id}:tomorrow")],
+        [InlineKeyboardButton(text=texts["btn_book_calendar"], callback_data=f"cbook:cal:{barber_id}:0:0")],
+        [back_button(f"cbarber_card:{barber_id}", texts)],
+    ])
+
+
+def calendar_keyboard(barber_id: int, year: int, month: int, texts: dict) -> InlineKeyboardMarkup:
+    """P2: Monthly calendar grid for date selection."""
+    import calendar
+    from datetime import date, timedelta
+    from app.utils.time_utils import tashkent_now
+
+    now = tashkent_now()
+    today = now.date()
+    max_date = today + timedelta(days=180)  # 6 months max
+
+    month_names_uz = [
+        "", "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
+        "Iyul", "Avgust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"
+    ]
+
+    rows = []
+    # Header row: month name
+    rows.append([InlineKeyboardButton(
+        text=f"📅 {month_names_uz[month]} {year}",
+        callback_data="noop"
+    )])
+
+    # Day headers
+    rows.append([
+        InlineKeyboardButton(text=d, callback_data="noop")
+        for d in ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
+    ])
+
+    cal = calendar.monthcalendar(year, month)
+    for week in cal:
+        week_btns = []
+        for day in week:
+            if day == 0:
+                week_btns.append(InlineKeyboardButton(text=" ", callback_data="noop"))
+            else:
+                d = date(year, month, day)
+                if d < today or d > max_date:
+                    week_btns.append(InlineKeyboardButton(text="·", callback_data="noop"))
+                else:
+                    label = f"[{day}]" if d == today else str(day)
+                    week_btns.append(InlineKeyboardButton(
+                        text=label,
+                        callback_data=f"cbook:pick:{barber_id}:{d.isoformat()}"
+                    ))
+        rows.append(week_btns)
+
+    # Navigation
+    nav = []
+    prev_month = month - 1
+    prev_year = year
+    if prev_month < 1:
+        prev_month = 12
+        prev_year -= 1
+    if date(prev_year, prev_month, 1) >= date(today.year, today.month, 1):
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"cbook:cal:{barber_id}:{prev_year}:{prev_month}"))
+
+    next_month = month + 1
+    next_year = year
+    if next_month > 12:
+        next_month = 1
+        next_year += 1
+    if date(next_year, next_month, 1) <= max_date:
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"cbook:cal:{barber_id}:{next_year}:{next_month}"))
+
+    if nav:
+        rows.append(nav)
+
+    rows.append([back_button(f"cbook_datepick_{barber_id}", texts)])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def analytics_category_keyboard(texts: dict) -> InlineKeyboardMarkup:
+    """P3: Choose analytics category."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=texts["btn_analytics_kamnamo"], callback_data="bprem:ana:kamnamo")],
+        [InlineKeyboardButton(text=texts["btn_analytics_doimiy"], callback_data="bprem:ana:doimiy")],
+        [InlineKeyboardButton(text=texts["btn_analytics_yoqotilgan"], callback_data="bprem:ana:yoqotilgan")],
+        [back_button("bprem_menu", texts)],
+    ])
+
+
+def admin_premium_settings_keyboard(texts: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=texts["btn_edit_premium_price"], callback_data="adm_prem_cfg:price")],
+        [InlineKeyboardButton(text=texts["btn_edit_payment_card"], callback_data="adm_prem_cfg:card")],
+        [InlineKeyboardButton(text=texts["btn_edit_support_profile"], callback_data="adm_prem_cfg:profile")],
+        [back_button("adm_menu", texts)],
+    ])
+
+
+def premium_buy_keyboard(status: str, texts: dict) -> InlineKeyboardMarkup:
+    rows = []
+    if status == 'INACTIVE' or status == 'EXPIRED':
+        rows.append([InlineKeyboardButton(text="🛒 Sotib olish", callback_data="bprem:buy")])
+    rows.append([back_button("bmenu", texts)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def premium_confirm_keyboard(texts: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Tasdiq yuborish", callback_data="bprem:confirm")],
+        [InlineKeyboardButton(text=texts["cancel"], callback_data="bmenu:premium")],
     ])
 
 
@@ -313,7 +473,7 @@ def booking_slots_keyboard(
                 cb = f"cbook:slot:{slot['hour_slot']}"
             row.append(InlineKeyboardButton(text=label, callback_data=cb))
         rows.append(row)
-    rows.append([back_button(f"cbarber:{barber_id}", texts)])
+    rows.append([back_button(f"cbarber_card:{barber_id}", texts)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

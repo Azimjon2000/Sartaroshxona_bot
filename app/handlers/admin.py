@@ -118,7 +118,7 @@ async def admin_barber_detail(callback: CallbackQuery, state: FSMContext, texts:
         status=barber["status"],
     )
 
-    kb = admin_barber_actions_keyboard(barber_id, barber["status"], texts)
+    kb = admin_barber_actions_keyboard(barber, texts)
 
     if barber.get("photo_file_id"):
         await ensure_flow_message(callback, card_text, state, keyboard=kb, photo=barber["photo_file_id"])
@@ -129,6 +129,56 @@ async def admin_barber_detail(callback: CallbackQuery, state: FSMContext, texts:
 @router.callback_query(F.data == "back:adm_barbers")
 async def back_to_barbers(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
     await _show_barbers_page(callback, state, texts, 0)
+
+
+# ═══════════════════════════════════════════
+# Premium Barbers List
+# ═══════════════════════════════════════════
+
+@router.callback_query(F.data == "adm:premiums")
+async def admin_premiums_list(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    await _show_premium_barbers_page(callback, state, texts, 0)
+
+
+@router.callback_query(F.data.startswith("page:admprems:"))
+async def admin_premiums_page(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    page = int(callback.data.split(":")[2])
+    await _show_premium_barbers_page(callback, state, texts, page)
+
+
+async def _show_premium_barbers_page(event, state, texts, page):
+    barbers = await fetch_all("SELECT * FROM barbers WHERE premium_status = 'ACTIVE' ORDER BY id DESC")
+    if not barbers:
+        await ensure_flow_message(event, "Faol premium sartaroshlar mavjud emas.", state,
+                                   keyboard=InlineKeyboardMarkup(inline_keyboard=[
+                                       [back_button("adm_menu", texts)]
+                                   ]))
+        return
+
+    page_items, total_pages, has_prev, has_next = paginate(barbers, page)
+
+    rows = []
+    for b in page_items:
+        until = b.get('premium_until', '?')
+        rows.append([InlineKeyboardButton(
+            text=f"👑 {b['name']} ({until} gacha)",
+            callback_data=f"admb:view:{b['telegram_id']}",
+        )])
+
+    nav = []
+    if has_prev:
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"page:admprems:{page - 1}"))
+    if has_next:
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"page:admprems:{page + 1}"))
+    if nav:
+        rows.append(nav)
+
+    rows.append([back_button("adm_menu", texts)])
+
+    await ensure_flow_message(
+        event, "👑 <b>Premium Sartaroshlar</b>\n\nQuyida faol obunaga ega sartaroshlar ro'yxati keltirilgan:", state,
+        keyboard=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
 
 
 # ── Approve ──
@@ -153,6 +203,185 @@ async def admin_approve_barber(callback: CallbackQuery, state: FSMContext, texts
 
     # Refresh barber detail
     await admin_barber_detail(callback, state, texts)
+
+
+# ── Premium Approve/Reject ──
+
+@router.callback_query(F.data.startswith("adm_prem:approve:"))
+async def admin_premium_approve(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    barber_id = int(callback.data.split(":")[2])
+    
+    from app.services.barber_service import update_barber_premium_status
+    from app.utils.time_utils import tashkent_now
+    from datetime import timedelta
+    
+    until_date = (tashkent_now() + timedelta(days=30)).strftime('%Y-%m-%d')
+    await update_barber_premium_status(barber_id, "ACTIVE", until_date)
+    await callback.answer("Premium tasdiqlandi!", show_alert=True)
+    logger.info(f"Admin {callback.from_user.id} approved premium for barber {barber_id}")
+
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    # Notify barber
+    try:
+        barber = await barber_service.get_barber(barber_id)
+        lang = barber["lang"] if barber else "uz"
+        from app.i18n.uz import TEXTS_UZ
+        from app.i18n.ru import TEXTS_RU
+        b_texts = TEXTS_RU if lang == "ru" else TEXTS_UZ
+        await bot.send_message(
+            chat_id=barber_id, 
+            text=b_texts.get("premium_approved", "🎉 Tabriklaymiz! Premium obunangiz faollashdi.\\nAmal qilish muddati: {until}").format(until=until_date)
+        )
+    except Exception as e:
+        logger.warning(f"Failed to notify barber {barber_id} about premium: {e}")
+
+
+@router.callback_query(F.data.startswith("adm_prem:reject:"))
+async def admin_premium_reject(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    barber_id = int(callback.data.split(":")[2])
+    
+    from app.services.barber_service import update_barber_premium_status
+    await update_barber_premium_status(barber_id, "INACTIVE", None)
+    await callback.answer("Premium rad etildi!", show_alert=True)
+    logger.info(f"Admin {callback.from_user.id} rejected premium for barber {barber_id}")
+
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    # Notify barber
+    try:
+        barber = await barber_service.get_barber(barber_id)
+        lang = barber["lang"] if barber else "uz"
+        from app.i18n.uz import TEXTS_UZ
+        from app.i18n.ru import TEXTS_RU
+        b_texts = TEXTS_RU if lang == "ru" else TEXTS_UZ
+        await bot.send_message(
+            chat_id=barber_id, 
+            text=b_texts.get("premium_rejected", "❌ Premium obuna so'rovingiz rad etildi.")
+        )
+    except Exception as e:
+        logger.warning(f"Failed to notify barber {barber_id} about premium rejection: {e}")
+
+
+# ═══════════════════════════════════════════
+# Admin Premium Config
+# ═══════════════════════════════════════════
+
+@router.callback_query(F.data == "adm:prem_settings")
+async def admin_premium_settings(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    price_row = await fetch_one("SELECT value FROM settings WHERE key='premium_price'")
+    card_row = await fetch_one("SELECT value FROM settings WHERE key='payment_card'")
+    profile_row = await fetch_one("SELECT value FROM settings WHERE key='support_profile'")
+
+    text = texts["admin_premium_settings_title"].format(
+        price=price_row["value"] if price_row else "0",
+        card=card_row["value"] if card_row else "—",
+        profile=profile_row["value"] if profile_row else "@admin",
+    )
+    from app.keyboards.inline import admin_premium_settings_keyboard
+    await ensure_flow_message(callback, text, state, keyboard=admin_premium_settings_keyboard(texts))
+
+
+@router.callback_query(F.data == "adm_prem_cfg:price")
+async def admin_edit_price_start(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    await state.set_state(AdminFSM.edit_premium_price)
+    await ensure_flow_message(callback, texts["admin_enter_price"], state)
+
+
+@router.message(AdminFSM.edit_premium_price)
+async def admin_edit_price_receive(message: Message, state: FSMContext, texts: dict, **kwargs):
+    try:
+        price = str(int(message.text.strip()))
+    except (ValueError, TypeError):
+        await message.answer(texts["error_generic"])
+        return
+    from app.db.base import execute_write
+    await execute_write("UPDATE settings SET value = ? WHERE key = 'premium_price'", (price,))
+    await state.clear()
+    await message.answer(texts["admin_price_updated"].format(price=price))
+
+
+@router.callback_query(F.data == "adm_prem_cfg:card")
+async def admin_edit_card_start(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    await state.set_state(AdminFSM.edit_payment_card)
+    await ensure_flow_message(callback, texts["admin_enter_card"], state)
+
+
+@router.message(AdminFSM.edit_payment_card)
+async def admin_edit_card_receive(message: Message, state: FSMContext, texts: dict, **kwargs):
+    card = message.text.strip()
+    from app.db.base import execute_write
+    await execute_write("UPDATE settings SET value = ? WHERE key = 'payment_card'", (card,))
+    await state.clear()
+    await message.answer(texts["admin_card_updated"])
+
+
+@router.callback_query(F.data == "adm_prem_cfg:profile")
+async def admin_edit_profile_start(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    await state.set_state(AdminFSM.edit_support_profile)
+    await ensure_flow_message(callback, texts["admin_enter_profile"], state)
+
+
+@router.message(AdminFSM.edit_support_profile)
+async def admin_edit_profile_receive(message: Message, state: FSMContext, texts: dict, **kwargs):
+    profile = message.text.strip()
+    from app.db.base import execute_write
+    await execute_write("UPDATE settings SET value = ? WHERE key = 'support_profile'", (profile,))
+    await state.clear()
+    await message.answer(texts["admin_profile_updated"])
+
+
+# ═══════════════════════════════════════════
+# Premium Requests
+# ═══════════════════════════════════════════
+
+@router.callback_query(F.data == "adm:prem_requests")
+async def admin_premium_requests(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    await _show_premium_requests_page(callback, state, texts, 0)
+
+
+@router.callback_query(F.data.startswith("page:premreqs:"))
+async def admin_premium_requests_page(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    page = int(callback.data.split(":")[2])
+    await _show_premium_requests_page(callback, state, texts, page)
+
+
+async def _show_premium_requests_page(event, state, texts, page):
+    barbers = await fetch_all("SELECT * FROM barbers WHERE premium_status = 'PENDING_APPROVAL' ORDER BY created_at DESC")
+    if not barbers:
+        await ensure_flow_message(event, texts["admin_no_premium_requests"], state,
+                                   keyboard=InlineKeyboardMarkup(inline_keyboard=[
+                                       [back_button("adm_menu", texts)]
+                                   ]))
+        return
+
+    page_items, total_pages, has_prev, has_next = paginate(barbers, page)
+    rows = []
+    for b in page_items:
+        rows.append([InlineKeyboardButton(
+            text=f"👑 {b['name']} — {b['phone']}",
+            callback_data=f"admb:view:{b['telegram_id']}",
+        )])
+
+    nav = []
+    if has_prev:
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"page:premreqs:{page - 1}"))
+    if has_next:
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"page:premreqs:{page + 1}"))
+    if nav:
+        rows.append(nav)
+    rows.append([back_button("adm_menu", texts)])
+
+    await ensure_flow_message(
+        event, f"📋 <b>Premium so'rovlar</b> ({len(barbers)} ta):", state,
+        keyboard=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
 
 
 # ── Block ──

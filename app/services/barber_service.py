@@ -11,10 +11,10 @@ async def create_barber(
 ):
     await execute_write(
         """INSERT INTO barbers
-           (telegram_id, name, phone, region_id, district_id, salon_name,
+           (id, telegram_id, name, phone, region_id, district_id, salon_name,
             photo_file_id, lat, lon, lang)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (telegram_id, name, phone, region_id, district_id,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (telegram_id, telegram_id, name, phone, region_id, district_id,
          salon_name, photo_file_id, lat, lon, lang),
     )
     # Initialize 16 work_hours (all disabled)
@@ -34,6 +34,16 @@ async def get_barber(telegram_id: int) -> Optional[dict]:
     return await fetch_one("SELECT * FROM barbers WHERE telegram_id = ?", (telegram_id,))
 
 
+async def update_auto_reminder_days(telegram_id: int, days: int):
+    from app.db.base import execute_write
+    await execute_write("UPDATE barbers SET auto_reminder_days = ? WHERE telegram_id = ?", (days, telegram_id))
+
+
+async def get_barber_by_db_id(db_id: int) -> Optional[dict]:
+    """Lookup barber by the helper `id` column (= telegram_id)."""
+    return await fetch_one("SELECT * FROM barbers WHERE id = ?", (db_id,))
+
+
 async def update_barber_status(telegram_id: int, status: str):
     await execute_write(
         "UPDATE barbers SET status = ? WHERE telegram_id = ?",
@@ -41,8 +51,15 @@ async def update_barber_status(telegram_id: int, status: str):
     )
 
 
+async def update_barber_premium_status(telegram_id: int, status: str, until: Optional[str] = None):
+    await execute_write(
+        "UPDATE barbers SET premium_status = ?, premium_until = ? WHERE telegram_id = ?",
+        (status, until, telegram_id),
+    )
+
+
 async def update_barber_field(telegram_id: int, field: str, value):
-    allowed = {"name", "phone", "salon_name", "photo_file_id", "lat", "lon", "lang", "region_id", "district_id"}
+    allowed = {"name", "phone", "salon_name", "photo_file_id", "lat", "lon", "lang", "region_id", "district_id", "is_blocked_temp"}
     if field not in allowed:
         raise ValueError(f"Field {field} not allowed")
     await execute_write(
@@ -191,6 +208,14 @@ async def get_barber_comments(barber_id: int) -> List[dict]:
            WHERE r.barber_id = ? AND r.comment IS NOT NULL AND r.comment != ''
            ORDER BY r.created_at DESC""",
         (barber_id,),
+    )
+
+
+async def auto_expire_premium(today: str):
+    """Set premium status to EXPIRED for barbers whose until date has passed."""
+    await execute_write(
+        "UPDATE barbers SET premium_status = 'EXPIRED', is_blocked_temp = 1 WHERE premium_status = 'ACTIVE' AND premium_until < ?",
+        (today,),
     )
 
 

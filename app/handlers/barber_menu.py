@@ -11,6 +11,7 @@ from app.keyboards.inline import (
     barber_menu_keyboard, barber_settings_keyboard, schedule_keyboard,
     media_gallery_keyboard, lang_keyboard, ok_keyboard,
     barber_booking_actions_keyboard, barber_confirm_cancel_keyboard,
+    back_button,
 )
 from app.keyboards.reply import (
     main_menu_reply_keyboard, phone_request_keyboard,
@@ -322,7 +323,8 @@ async def on_hair_price(message: Message, state: FSMContext, texts: dict, **kwar
         return
     await barber_service.update_price(message.from_user.id, "hair_price", int(price))
     await state.set_state(BarberMenuFSM.price_beard)
-    await ensure_flow_message(message, texts["enter_beard_price"], state)
+    text = f"{texts['hair_price_set']}\n\n{texts['enter_beard_price']}"
+    await ensure_flow_message(message, text, state)
 
 
 @router.message(BarberMenuFSM.price_beard, F.text)
@@ -333,7 +335,8 @@ async def on_beard_price(message: Message, state: FSMContext, texts: dict, **kwa
         return
     await barber_service.update_price(message.from_user.id, "beard_price", int(price))
     await state.set_state(BarberMenuFSM.price_groom)
-    await ensure_flow_message(message, texts["enter_groom_price"], state)
+    text = f"{texts['beard_price_set']}\n\n{texts['enter_groom_price']}"
+    await ensure_flow_message(message, text, state)
 
 
 @router.message(BarberMenuFSM.price_groom, F.text)
@@ -348,7 +351,8 @@ async def on_groom_price(message: Message, state: FSMContext, texts: dict, **kwa
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=texts["rate_skip_btn"], callback_data="bprice:skip_note")],
     ])
-    await ensure_flow_message(message, texts["enter_extra_note"], state, keyboard=kb)
+    text = f"{texts['groom_price_set']}\n\n{texts['enter_extra_note']}"
+    await ensure_flow_message(message, text, state, keyboard=kb)
 
 
 @router.message(BarberMenuFSM.price_note, F.text)
@@ -377,6 +381,122 @@ async def on_skip_note(callback: CallbackQuery, state: FSMContext, texts: dict, 
 async def barber_settings(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
     await ensure_flow_message(callback, texts["barber_settings_title"], state,
                                keyboard=barber_settings_keyboard(texts))
+
+
+# ── Premium Obuna ──
+
+@router.callback_query(F.data == "bmenu:premium")
+async def barber_premium_status(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    barber = await barber_service.get_barber(callback.from_user.id)
+    if not barber:
+        return
+        
+    status = barber.get("premium_status", "INACTIVE")
+    until = barber.get("premium_until")
+    
+    if status == 'ACTIVE' and until:
+        until_text = f"Amal qilish muddati: <b>{until}</b>"
+        status_text = texts.get("premium_status_active", "Faol")
+    elif status == 'PENDING_APPROVAL':
+        until_text = ""
+        status_text = texts.get("premium_status_pending", "Admindan tasdiq kutilmoqda")
+    else:
+        until_text = ""
+        status_text = texts.get("premium_status_inactive", "Faol emas")
+
+    text = texts["premium_status_msg"].format(status=status_text, until_text=until_text)
+    from app.keyboards.inline import premium_buy_keyboard
+    
+    if status == 'ACTIVE':
+        # Show premium menu for active subscribers
+        from app.keyboards.inline import premium_menu_keyboard
+        rows = [
+            [InlineKeyboardButton(text=texts["btn_premium_reminder"], callback_data="bprem:reminder")],
+            [InlineKeyboardButton(text=texts["btn_premium_analytics"], callback_data="bprem:analytics")],
+            [back_button("bmenu", texts)],
+        ]
+        from aiogram.types import InlineKeyboardMarkup
+        await ensure_flow_message(callback, text, state, keyboard=InlineKeyboardMarkup(inline_keyboard=rows))
+    else:
+        await ensure_flow_message(callback, text, state, keyboard=premium_buy_keyboard(status, texts))
+
+
+@router.callback_query(F.data == "back:bmenu_premium")
+async def back_to_premium(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    await barber_premium_status(callback, state, texts)
+
+
+@router.callback_query(F.data == "bprem:buy")
+async def barber_premium_buy(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    from app.db.base import fetch_one
+    price_row = await fetch_one("SELECT value FROM settings WHERE key='premium_price'")
+    card_row = await fetch_one("SELECT value FROM settings WHERE key='payment_card'")
+    profile_row = await fetch_one("SELECT value FROM settings WHERE key='support_profile'")
+    
+    price = price_row["value"] if price_row else "0"
+    card = card_row["value"] if card_row else "—"
+    support_profile = profile_row["value"] if profile_row else "@admin"
+    
+    text = texts["premium_buy_msg"].format(price=price, card=card, support_profile=support_profile)
+    from app.keyboards.inline import premium_confirm_keyboard
+    await ensure_flow_message(callback, text, state, keyboard=premium_confirm_keyboard(texts))
+
+
+@router.callback_query(F.data == "bprem:confirm")
+async def barber_premium_confirm(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    user_id = callback.from_user.id
+    barber = await barber_service.get_barber(user_id)
+    if not barber:
+        return
+
+    # Update status to PENDING
+    from app.services.barber_service import update_barber_premium_status
+    await update_barber_premium_status(user_id, "PENDING_APPROVAL", None) 
+    
+    # Notify Admin
+    from app.config import ADMIN_IDS
+    from app.keyboards.inline import admin_premium_approve_keyboard
+    from app.loader import bot
+    
+    # Default translation fallback if missing
+    admin_text = texts.get("admin_premium_request", "👑 <b>PREMIUM SO'ROVI</b>\\n\\nSartarosh: {name}\\nTelefon: {phone}\\nSalon: {salon}\\nID: {id}\\n\\nTasdiqlaysizmi?").format(
+        name=barber["name"],
+        phone=barber["phone"],
+        salon=barber["salon_name"],
+        id=barber["id"]
+    )
+    
+    for admin_id in ADMIN_IDS:
+        try:
+            await bot.send_message(
+                chat_id=admin_id,
+                text=admin_text,
+                reply_markup=admin_premium_approve_keyboard(user_id, texts), 
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to notify admin {admin_id}: {e}")
+            
+    await callback.answer(texts.get("premium_pending", "So'rov yuborildi"), show_alert=True)
+    await barber_premium_status(callback, state, texts)
+
+
+# ── Referral Link ──
+
+@router.callback_query(F.data == "bset:referral")
+async def bset_referral(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    barber = await barber_service.get_barber(callback.from_user.id)
+    if not barber:
+        return
+    me = await callback.bot.get_me()
+    bot_username = me.username
+    barber_id = barber.get("id") or barber.get("telegram_id")
+    link = f"https://t.me/{bot_username}?start=ref_{barber_id}"
+    
+    text = texts["referral_link_msg"].format(link=link)
+    from app.keyboards.inline import back_button
+    kb = InlineKeyboardMarkup(inline_keyboard=[[back_button("bmenu", texts)]])
+    await ensure_flow_message(callback, text, state, keyboard=kb)
 
 
 # ── Edit Name ──

@@ -10,27 +10,33 @@ CREATE TABLE IF NOT EXISTS admins (
 );
 
 CREATE TABLE IF NOT EXISTS clients (
-    telegram_id  INTEGER PRIMARY KEY,
-    name         TEXT NOT NULL,
-    phone        TEXT,
-    lang         TEXT NOT NULL DEFAULT 'uz' CHECK(lang IN ('uz','ru')),
-    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    telegram_id    INTEGER PRIMARY KEY,
+    name           TEXT NOT NULL,
+    phone          TEXT,
+    lang           TEXT NOT NULL DEFAULT 'uz' CHECK(lang IN ('uz','ru')),
+    ref_barber_id  INTEGER,
+    ref_lock_date  TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS barbers (
-    telegram_id   INTEGER PRIMARY KEY,
-    name          TEXT NOT NULL,
-    salon_name    TEXT NOT NULL,
-    phone         TEXT NOT NULL,
-    region_id     INTEGER NOT NULL,
-    district_id   INTEGER NOT NULL,
-    photo_file_id TEXT,
-    lat           REAL,
-    lon           REAL,
-    status        TEXT NOT NULL DEFAULT 'PENDING'
-                  CHECK(status IN ('PENDING','APPROVED','BLOCKED')),
-    lang          TEXT NOT NULL DEFAULT 'uz' CHECK(lang IN ('uz','ru')),
-    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    telegram_id     INTEGER PRIMARY KEY,
+    id              INTEGER UNIQUE,
+    name            TEXT NOT NULL,
+    salon_name      TEXT NOT NULL,
+    phone           TEXT NOT NULL,
+    region_id       INTEGER NOT NULL,
+    district_id     INTEGER NOT NULL,
+    photo_file_id   TEXT,
+    lat             REAL,
+    lon             REAL,
+    status          TEXT NOT NULL DEFAULT 'PENDING'
+                    CHECK(status IN ('PENDING','APPROVED','BLOCKED')),
+    lang            TEXT NOT NULL DEFAULT 'uz' CHECK(lang IN ('uz','ru')),
+    premium_status  TEXT DEFAULT 'INACTIVE',
+    premium_until   TEXT,
+    is_blocked_temp INTEGER DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (region_id) REFERENCES regions(id),
     FOREIGN KEY (district_id) REFERENCES districts(id)
 );
@@ -84,15 +90,18 @@ CREATE TABLE IF NOT EXISTS media_videos (
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    barber_id    INTEGER NOT NULL,
-    client_id    INTEGER NOT NULL,
-    date         TEXT NOT NULL,
-    hour_slot    INTEGER NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'DRAFT'
-                 CHECK(status IN ('DRAFT','CONFIRMED','CANCELLED','DONE','EXPIRED')),
-    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-    confirmed_at TEXT,
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    barber_id      INTEGER NOT NULL,
+    client_id      INTEGER NOT NULL,
+    date           TEXT NOT NULL,
+    hour_slot      INTEGER NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'DRAFT'
+                   CHECK(status IN ('DRAFT','CONFIRMED','CANCELLED','DONE','EXPIRED')),
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    confirmed_at   TEXT,
+    created_date   TEXT,
+    reminded       INTEGER DEFAULT 0,
+    is_active      INTEGER DEFAULT 1,
     FOREIGN KEY (barber_id) REFERENCES barbers(telegram_id) ON DELETE CASCADE,
     FOREIGN KEY (client_id) REFERENCES clients(telegram_id) ON DELETE CASCADE
 );
@@ -116,6 +125,19 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 INSERT OR IGNORE INTO settings (key, value) VALUES ('support_username', '@admin');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('premium_price', '150000');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('payment_card', '8600 0000 0000 0000');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('support_profile', '@admin');
+
+CREATE TABLE IF NOT EXISTS reminder_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    barber_id  INTEGER NOT NULL,
+    client_id  INTEGER NOT NULL,
+    sent_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(barber_id, client_id),
+    FOREIGN KEY (barber_id) REFERENCES barbers(telegram_id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES clients(telegram_id) ON DELETE CASCADE
+);
 
 CREATE TABLE IF NOT EXISTS penalties (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,4 +153,6 @@ CREATE INDEX IF NOT EXISTS idx_barbers_search ON barbers(status, lat, lon);
 CREATE INDEX IF NOT EXISTS idx_bookings_barber ON bookings(barber_id, date, status);
 CREATE INDEX IF NOT EXISTS idx_bookings_client ON bookings(client_id, status, date);
 CREATE INDEX IF NOT EXISTS idx_ratings_barber ON ratings(barber_id);
+CREATE INDEX IF NOT EXISTS idx_barbers_premium ON barbers(premium_status, premium_until);
+CREATE INDEX IF NOT EXISTS idx_bookings_reminded ON bookings(date, status, reminded);
 """

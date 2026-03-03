@@ -32,8 +32,60 @@ router = Router(name="client_search")
 # Search Entry Point
 # ═══════════════════════════════════════════
 
+async def enforce_referral_lock(callback: CallbackQuery, state: FSMContext, texts: dict) -> bool:
+    """Check if the client is locked today and redirect to barber card if so."""
+    from app.utils.time_utils import today_uz_str
+    user_id = callback.from_user.id
+    
+    client = await client_service.get_client(user_id)
+    if client and client.get("ref_lock_date") == today_uz_str():
+        ref_barber_id = client.get("ref_barber_id")
+        if ref_barber_id:
+            barber = await barber_service.get_barber_by_db_id(ref_barber_id)
+            if barber:
+                # Enforce globally required rating checks before letting them access the card
+                unrated = await booking_service.get_client_unrated_done(user_id)
+                if unrated:
+                    from app.keyboards.inline import unrated_booking_keyboard
+                    kb = unrated_booking_keyboard(unrated["id"], texts)
+                    await ensure_flow_message(callback, texts["rate_before_book"], state, keyboard=kb)
+                    return True
+
+                # Check booking limit violations
+                active_booking = await booking_service.get_client_active_booking(user_id)
+                if active_booking:
+                    text = texts["active_booking_block_msg"]
+                    booking_id = active_booking["id"]
+                    from app.keyboards.inline import back_button
+                    kb = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text=texts["btn_view_active_booking"], callback_data="cmenu:active_orders")],
+                        [InlineKeyboardButton(text=texts["cancel"], callback_data=f"cbook:cancel_ask:{booking_id}")],
+                        [back_button("cmenu", texts)]
+                    ])
+                    await ensure_flow_message(callback, text, state, keyboard=kb)
+                    return True
+                    
+                # Check for ANY Usage Today (Strict Limit)
+                from app.utils.time_utils import today_tashkent
+                today = today_tashkent()
+                usage = await booking_service.get_client_today_usage(user_id, today)
+                if usage:
+                    text = texts.get("done_booking_block_msg", "Siz bugun xizmatdan foydalanib bo'lgansiz.")
+                    from app.keyboards.inline import back_button
+                    kb = InlineKeyboardMarkup(inline_keyboard=[[back_button("cmenu", texts)]])
+                    await ensure_flow_message(callback, text, state, keyboard=kb)
+                    return True
+                    
+                await callback.answer(texts.get("referral_locked_search_msg", "Siz bugun faqat vizitka orqali yozila olasiz!"), show_alert=True)
+                await show_barber_card(callback, state, texts, barber["telegram_id"])
+                return True
+    return False
+
 @router.callback_query(F.data == "cmenu:search")
 async def client_search_start(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    if await enforce_referral_lock(callback, state, texts):
+        return
+
     # Check if client has unrated booking
     unrated = await booking_service.get_client_unrated_done(callback.from_user.id)
     if unrated:
@@ -152,10 +204,14 @@ async def on_radius_chosen(callback: CallbackQuery, state: FSMContext, texts: di
         if dist <= radius_km:
             nearby.append({**dict(b), "distance": round(dist, 1)})
 
-    nearby.sort(key=lambda x: x["distance"])
+    nearby.sort(key=lambda x: (
+        0 if x.get("premium_status") == "ACTIVE" else 1,
+        x["distance"]
+    ))
     await state.update_data(search_results=[
         {"telegram_id": b["telegram_id"], "name": b["name"],
-         "salon_name": b["salon_name"], "distance": b["distance"]}
+         "salon_name": b["salon_name"], "distance": b["distance"],
+         "premium_status": b.get("premium_status")}
         for b in nearby
     ])
     await _show_barber_list(callback, state, texts, 0)
@@ -211,12 +267,17 @@ async def on_search_district(callback: CallbackQuery, state: FSMContext, texts: 
             "telegram_id": b["telegram_id"], "name": b["name"],
             "salon_name": b["salon_name"], "distance": None,
             "avg_rating": avg, "served_count": count,
+            "premium_status": b.get("premium_status"),
         })
 
-    result.sort(key=lambda x: (-x["avg_rating"], -x["served_count"]))
+    result.sort(key=lambda x: (
+        0 if x.get("premium_status") == "ACTIVE" else 1,
+        -x["avg_rating"], -x["served_count"]
+    ))
     await state.update_data(search_results=[
         {"telegram_id": b["telegram_id"], "name": b["name"],
-         "salon_name": b["salon_name"], "distance": b.get("distance")}
+         "salon_name": b["salon_name"], "distance": b.get("distance"),
+         "premium_status": b.get("premium_status")}
         for b in result
     ])
     await _show_barber_list(callback, state, texts, 0)
@@ -265,8 +326,9 @@ async def _show_barber_list(event, state, texts, page):
     rows = []
     for b in page_items:
         dist_str = f" ({b['distance']} km)" if b.get("distance") is not None else ""
+        prefix = "👑 " if b.get("premium_status") == "ACTIVE" else "💈 "
         rows.append([InlineKeyboardButton(
-            text=f"💈 {b['name']} — {b['salon_name']}{dist_str}",
+            text=f"{prefix}{b['name']} — {b['salon_name']}{dist_str}",
             callback_data=f"cbarber:view:{b['telegram_id']}",
         )])
 
@@ -310,10 +372,10 @@ async def back_to_search_list(callback: CallbackQuery, state: FSMContext, texts:
 @router.callback_query(F.data.startswith("cbarber:view:"))
 async def barber_card_view(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
     barber_id = int(callback.data.split(":")[2])
-    await _show_barber_card(callback, state, texts, barber_id)
+    await show_barber_card(callback, state, texts, barber_id)
 
 
-async def _show_barber_card(event, state, texts, barber_id):
+async def show_barber_card(event, state, texts, barber_id):
     barber = await barber_service.get_barber(barber_id)
     if not barber:
         await send_ok_popup(event, texts["no_barbers_found"])
@@ -377,10 +439,19 @@ async def barber_card_actions(callback: CallbackQuery, state: FSMContext, texts:
             await callback.answer(texts["rate_before_book"], show_alert=True)
             return
 
-        today = today_tashkent()
-        await _show_booking_slots(callback, state, texts, barber_id)
+        # Check premium expired barber
+        barber = await barber_service.get_barber(barber_id)
+        if barber and barber.get("is_blocked_temp") == 1:
+            await callback.answer(texts.get("premium_barber_blocked_msg", "Bu sartarosh hozirda mavjud emas."), show_alert=True)
+            return
 
-        await _show_booking_slots(callback, state, texts, barber_id)
+        # P2: Premium barber → show date picker
+        if barber and barber.get("premium_status") == "ACTIVE":
+            from app.keyboards.inline import future_booking_date_keyboard
+            await ensure_flow_message(callback, texts["choose_booking_date"], state,
+                                       keyboard=future_booking_date_keyboard(barber_id, texts))
+        else:
+            await _show_booking_slots(callback, state, texts, barber_id, today_tashkent())
 
 
 # ═══════════════════════════════════════════
@@ -495,34 +566,103 @@ async def _show_barber_reviews(event, state, texts, barber_id):
 @router.callback_query(F.data.startswith("back:cbarber_card:"))
 async def back_to_barber_card(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
     barber_id = int(callback.data.split(":")[2])
-    await _show_barber_card(callback, state, texts, barber_id)
+    await show_barber_card(callback, state, texts, barber_id)
+
+
+# ═══════════════════════════════════════════
+# P2 — Future Booking Date Selection
+# ═══════════════════════════════════════════
+
+@router.callback_query(F.data.startswith("cbook:date:"))
+async def on_date_chosen(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    parts = callback.data.split(":")
+    barber_id = int(parts[2])
+    date_choice = parts[3]
+
+    if date_choice == "today":
+        target_date = today_tashkent()
+    elif date_choice == "tomorrow":
+        from datetime import timedelta
+        from app.utils.time_utils import tashkent_now
+        target_date = (tashkent_now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    else:
+        target_date = today_tashkent()
+
+    existing = await booking_service.get_client_booking_for_date(callback.from_user.id, target_date)
+    if existing:
+        await callback.answer(texts["booking_date_blocked"], show_alert=True)
+        return
+
+    await _show_booking_slots(callback, state, texts, barber_id, target_date)
+
+
+@router.callback_query(F.data.startswith("cbook:cal:"))
+async def on_calendar_view(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    parts = callback.data.split(":")
+    barber_id = int(parts[2])
+    year = int(parts[3])
+    month = int(parts[4])
+
+    if year == 0 and month == 0:
+        from app.utils.time_utils import tashkent_now
+        now = tashkent_now()
+        year = now.year
+        month = now.month
+
+    from app.keyboards.inline import calendar_keyboard
+    await ensure_flow_message(callback, texts.get("choose_booking_date", "Sana tanlang:"), state,
+                               keyboard=calendar_keyboard(barber_id, year, month, texts))
+
+
+@router.callback_query(F.data.startswith("cbook:pick:"))
+async def on_calendar_pick(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    parts = callback.data.split(":")
+    barber_id = int(parts[2])
+    target_date = parts[3]
+
+    existing = await booking_service.get_client_booking_for_date(callback.from_user.id, target_date)
+    if existing:
+        await callback.answer(texts["booking_date_blocked"], show_alert=True)
+        return
+
+    await _show_booking_slots(callback, state, texts, barber_id, target_date)
+
+
+@router.callback_query(F.data.startswith("back:cbook_datepick_"))
+async def back_to_date_pick(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    barber_id = int(callback.data.replace("back:cbook_datepick_", ""))
+    from app.keyboards.inline import future_booking_date_keyboard
+    await ensure_flow_message(callback, texts["choose_booking_date"], state,
+                               keyboard=future_booking_date_keyboard(barber_id, texts))
 
 
 # ═══════════════════════════════════════════
 # Booking Flow
 # ═══════════════════════════════════════════
 
-async def _show_booking_slots(event, state, texts, barber_id):
-    today = today_tashkent()
+async def _show_booking_slots(event, state, texts, barber_id, target_date=None):
+    if target_date is None:
+        target_date = today_tashkent()
     work_hours = await barber_service.get_work_hours(barber_id)
-    confirmed = await booking_service.get_confirmed_slots(barber_id, today)
+    confirmed = await booking_service.get_confirmed_slots(barber_id, target_date)
 
     enabled_slots = [wh for wh in work_hours if wh["is_enabled"]]
     if not enabled_slots:
         await send_ok_popup(event, texts["no_available_slots"])
         return
 
+    today = today_tashkent()
     slots = []
     for wh in enabled_slots:
         slot = dict(wh)
         slot["booked"] = wh["hour_slot"] in confirmed
-        # Also exclude slots already past
-        remaining = seconds_until_slot(today, wh["hour_slot"])
-        if remaining < 0:
-            slot["booked"] = True  # Past slots can't be booked
+        if target_date == today:
+            remaining = seconds_until_slot(target_date, wh["hour_slot"])
+            if remaining < 0:
+                slot["booked"] = True
         slots.append(slot)
 
-    await state.update_data(booking_barber_id=barber_id, booking_date=today)
+    await state.update_data(booking_barber_id=barber_id, booking_date=target_date)
     await ensure_flow_message(event, texts["book_choose_slot"], state,
                                keyboard=booking_slots_keyboard(slots, barber_id, texts))
 
@@ -736,6 +876,9 @@ async def on_booking_cancel(callback: CallbackQuery, state: FSMContext, texts: d
 
 @router.callback_query(F.data == "cmenu:top_rated")
 async def top_rated_start(callback: CallbackQuery, state: FSMContext, texts: dict, **kwargs):
+    if await enforce_referral_lock(callback, state, texts):
+        return
+
     # Check unrated
     unrated = await booking_service.get_client_unrated_done(callback.from_user.id)
     if unrated:

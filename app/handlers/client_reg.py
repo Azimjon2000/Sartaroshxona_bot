@@ -71,17 +71,40 @@ async def _finish_client_reg(message: Message, state: FSMContext, texts: dict, p
         lang="uz",
     )
 
-    await state.clear()
     logger.info(f"Client registered: user={user_id}, name={data['name']}")
 
-    # Show client menu
-    await message.answer(
-        texts["client_menu_title"],
-        reply_markup=client_menu_keyboard(texts),
-        parse_mode="HTML",
-    )
-    # Send main menu reply keyboard
-    await message.answer(texts["main_menu"], reply_markup=main_menu_reply_keyboard(texts))
+    # Check for referral redirection
+    ref_id = data.get("ref_barber_id")
+    if ref_id:
+        from app.handlers.client_search import show_barber_card
+        from app.services import barber_service, booking_service
+        from app.utils.time_utils import today_tashkent
+        
+        # Double check for ANY Usage Today even if they just registered (safety)
+        usage = await booking_service.get_client_today_usage(user_id, today_tashkent())
+        if usage:
+            await state.clear()
+            await message.answer(texts.get("done_booking_block_msg", "Siz bugun xizmatdan foydalanib bo'lgansiz, ertaga qayta kiring."))
+            await message.answer(texts["main_menu"], reply_markup=main_menu_reply_keyboard(texts))
+            return
+
+        # Get barber details to get their telegram_id
+        barber = await barber_service.get_barber_by_db_id(ref_id)
+        if barber:
+            await state.clear()
+            await show_barber_card(message, state, texts, barber["telegram_id"])
+            await message.answer(texts["main_menu"], reply_markup=main_menu_reply_keyboard(texts))
+            # ... continue with admin notification
+    else:
+        await state.clear()
+        # Show client menu
+        await message.answer(
+            texts["client_menu_title"],
+            reply_markup=client_menu_keyboard(texts),
+            parse_mode="HTML",
+        )
+        # Send main menu reply keyboard
+        await message.answer(texts["main_menu"], reply_markup=main_menu_reply_keyboard(texts))
 
     # Notify Admins
     try:

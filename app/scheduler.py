@@ -23,6 +23,27 @@ async def scheduler_loop():
             from app.services import client_service, barber_service
             
             now = now_tashkent()
+            
+            # Phase 10: Premium Auto-Expiry
+            try:
+                await barber_service.auto_expire_premium(today)
+            except Exception as e:
+                logger.error(f"Failed to auto-expire premium: {e}")
+
+            # Phase 10: Premium Auto-Reminders
+            try:
+                await booking_service.send_premium_reminders(today, now, bot)
+            except Exception as e:
+                logger.error(f"Failed to send premium reminders: {e}")
+
+            # P1 Extension: Automated Daily Reminders (at 10:00 AM)
+            if now.hour == 10 and now.minute == 0:
+                try:
+                    from app.services import reminder_service
+                    await reminder_service.run_daily_auto_reminders(bot)
+                except Exception as e:
+                    logger.error(f"Failed to run daily auto-reminders: {e}")
+                
             to_finish = await booking_service.get_confirmed_bookings_to_finish(today, now.hour)
             
             for b in to_finish:

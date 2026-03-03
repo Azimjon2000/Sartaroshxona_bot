@@ -25,6 +25,13 @@ async def update_client_field(telegram_id: int, field: str, value):
     )
 
 
+async def update_client_lock(telegram_id: int, ref_barber_id: Optional[int], ref_lock_date: Optional[str]):
+    await execute_write(
+        "UPDATE clients SET ref_barber_id = ?, ref_lock_date = ? WHERE telegram_id = ?",
+        (ref_barber_id, ref_lock_date, telegram_id),
+    )
+
+
 async def get_clients_count() -> int:
     row = await fetch_one("SELECT COUNT(*) as cnt FROM clients")
     return row["cnt"] if row else 0
