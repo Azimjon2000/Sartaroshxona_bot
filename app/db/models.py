@@ -153,6 +153,4 @@ CREATE INDEX IF NOT EXISTS idx_barbers_search ON barbers(status, lat, lon);
 CREATE INDEX IF NOT EXISTS idx_bookings_barber ON bookings(barber_id, date, status);
 CREATE INDEX IF NOT EXISTS idx_bookings_client ON bookings(client_id, status, date);
 CREATE INDEX IF NOT EXISTS idx_ratings_barber ON ratings(barber_id);
-CREATE INDEX IF NOT EXISTS idx_barbers_premium ON barbers(premium_status, premium_until);
-CREATE INDEX IF NOT EXISTS idx_bookings_reminded ON bookings(date, status, reminded);
 """
